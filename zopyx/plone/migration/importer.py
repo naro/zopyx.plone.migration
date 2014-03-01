@@ -633,7 +633,10 @@ def setup_plone(app, dest_folder, site_id, products=(), profiles=()):
     app = makerequest(app)
     dest = app
     if dest_folder:
-        dest = dest.restrictedTraverse(dest_folder)
+        dest = dest.restrictedTraverse(dest_folder, None)
+        if dest is None:
+            app.invokeFactory('Folder', dest_folder)
+            dest = dest.restrictedTraverse(dest_folder)
     if site_id in dest.objectIds():
         log('%s already exists in %s - REMOVING IT' % (site_id, dest.absolute_url(1)))
         if dest.meta_type != 'Folder':
