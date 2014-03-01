@@ -29,24 +29,24 @@ from Products.CMFPlacefulWorkflow.PlacefulWorkflowTool import WorkflowPolicyConf
 
 IGNORED_FIELDS = ('id', 'relatedItems')
 IGNORED_TYPES = (
-     'Topic', 
-#    'Ploneboard', 
-#    'PloneboardForum', 
-#    'NewsletterTheme', 
-#    'Newsletter', 
-    'Section', 
-    'NewsletterBTree', 
-    'NewsletterReference', 
-    'NewsletterRichReference', 
+     'Topic',
+#    'Ploneboard',
+#    'PloneboardForum',
+#    'NewsletterTheme',
+#    'Newsletter',
+    'Section',
+    'NewsletterBTree',
+    'NewsletterReference',
+    'NewsletterRichReference',
     'CalendarXFolder',
 #    'GMap',
-#    'Collage', 
-#    'CollageRow', 
+#    'Collage',
+#    'CollageRow',
 #    'CollageColumn',
 #    'FormFolder',
 #    'PloneboardConversation',
 #    'PloneboardComment',
-)   
+)
 
 PT_REPLACE_MAP = {
     'NewsletterTheme' : 'EasyNewsletter',
@@ -122,12 +122,12 @@ def import_members(options):
         # omit group accounts
         if username.startswith('group_'):
             continue
-        
+
         roles = get(section, 'roles').split(',') + ['Member']
-    
+
         try:
-            pr.addMember(username, 
-                         get(section, 'password'), 
+            pr.addMember(username,
+                         get(section, 'password'),
                          roles=roles)
         except Exception, e:
             errors.append(dict(username=username, error=e))
@@ -162,13 +162,13 @@ def import_groups(options):
             log('-> %s' % grp_id)
 
         roles = get(section, 'roles').split(',')
-        groups_tool.addGroup(grp_id)    
+        groups_tool.addGroup(grp_id)
         groups_tool.editGroup(grp_id, roles=roles)
         grp = groups_tool.getGroupById(grp_id)
         for member in members:
             grp.addMember(member)
         count += 1
-                                  
+
     log('%d groups imported' % count)
 
 
@@ -177,7 +177,7 @@ def folder_create(root, dirname, portal_type):
     current = root
     components = dirname.split('/')
     for c in components[:-1]:
-        if not c: 
+        if not c:
             continue
         if not c in current.objectIds():
             #_createObjectByType('Folder', current, id=c)
@@ -326,7 +326,7 @@ def setReviewState(content, state_id, acquire_permissions=False,
 
     workflows = portal_workflow.getWorkflowsFor(content)
     if not workflows:
-        return 
+        return
     wf_def = workflows[0]
     wf_id= wf_def.getId()
 
@@ -396,7 +396,7 @@ def update_content(options, new_obj, old_uid):
 def create_new_obj(options, folder, old_uid):
     if not old_uid:
         return
-    
+
     pickle_filename = os.path.join(options.input_directory, 'content', old_uid)
     if not os.path.exists(pickle_filename):
         return
@@ -435,7 +435,7 @@ def create_new_obj(options, folder, old_uid):
             field.set(new_obj, v)
         except Exception, e:
             log('Unable to set %s for %s (%s)' % (k, new_obj.absolute_url(1), e))
-            
+
     setLocalRolesBlock(new_obj, obj_data['metadata']['local_roles_block'])
     setObjectPosition(new_obj, obj_data['metadata']['position_parent'])
     changeOwner(new_obj, obj_data['metadata']['owner'])
@@ -479,7 +479,7 @@ def import_content(options):
         if uid:
             update_content(options, new_obj, uid)
         if portal_type in ('Newsletter', 'NewsletterTheme'):
-            import_plonegazette_subscribers(options, new_obj, uid) 
+            import_plonegazette_subscribers(options, new_obj, uid)
 
     transaction.savepoint()
 
@@ -522,7 +522,7 @@ def import_content(options):
             obj = options.plone.restrictedTraverse(path,None)
             try:
                 child_ids = obj.objectIds()
-            except AttributeError:                
+            except AttributeError:
                 child_ids = []
             if default_page in child_ids:
                 log('Setting default page for %s to %s' % (obj.absolute_url(1), default_page))
@@ -567,7 +567,7 @@ def import_content(options):
             obj = options.plone.restrictedTraverse(path,None)
             try:
                 child_ids = obj.objectIds()
-            except AttributeError:                
+            except AttributeError:
                 child_ids = []
             if default_page in child_ids:
                 log('Setting default page for %s to %s' % (obj.absolute_url(1), default_page))
@@ -587,7 +587,7 @@ def import_content(options):
                         ref_objs.append(o)
                 log('Setting related items on %s' % obj.absolute_url(1))
                 if ref_objs:
-                    obj.setRelatedItems(ref_objs)                                            
+                    obj.setRelatedItems(ref_objs)
 
 
 def log(s):
@@ -602,7 +602,10 @@ def setup_plone(app, dest_folder, site_id, products=(), profiles=()):
     app = makerequest(app)
     dest = app
     if dest_folder:
-        dest = dest.restrictedTraverse(dest_folder)
+        dest = dest.restrictedTraverse(dest_folder, None)
+        if dest is None:
+            app.invokeFactory('Folder', dest_folder)
+            dest = dest.restrictedTraverse(dest_folder)
     if site_id in dest.objectIds():
         log('%s already exists in %s - REMOVING IT' % (site_id, dest.absolute_url(1)))
         if dest.meta_type != 'Folder':
