@@ -4,6 +4,7 @@
 ################################################################
 
 import os
+import sys
 import shutil
 import tempfile
 import glob
@@ -21,6 +22,8 @@ from OFS.Folder import manage_addFolder
 from Testing.makerequest import makerequest
 from AccessControl.SecurityManagement import newSecurityManager
 from App.config import getConfiguration
+from Products.Archetypes.config import UUID_ATTR
+from Products.Archetypes.interfaces import IReferenceable
 from Products.CMFCore.utils import getToolByName
 from Products.CMFPlone.factory import addPloneSite
 from Products.CMFPlone.utils import _createObjectByType
@@ -46,6 +49,8 @@ IGNORED_TYPES = (
 #    'FormFolder',
 #    'PloneboardConversation',
 #    'PloneboardComment',
+     'RSSFeedRecipe',
+     'PlonePopoll',
 )
 
 PT_REPLACE_MAP = {
@@ -53,6 +58,9 @@ PT_REPLACE_MAP = {
 #    'NewsletterTheme' : 'ENLIssue',
     'Newsletter' : 'ENLIssue',
     'GMap' : 'GeoLocation',
+    'Folder_spec': 'Folder',
+    'PloneExFile': 'File',
+    'Google Video': 'Document',
 }
 
 def import_plonegazette_subscribers(options, newsletter, old_uid):
@@ -382,6 +390,14 @@ def update_content(options, new_obj, old_uid):
             except Exception, e:
                 log('Could not update field %s of %s (error=%s)' % (field.getName(), new_obj.absolute_url(), e))
 
+    if IReferenceable.providedBy(new_obj):
+        oldUID = new_obj.UID()
+        if oldUID != old_uid:
+            if not oldUID:
+                setattr(new_obj, UUID_ATTR, old_uid)
+            else:
+                new_obj._setUID(old_uid)
+
     setLocalRolesBlock(new_obj, obj_data['metadata']['local_roles_block'])
     setObjectPosition(new_obj, obj_data['metadata']['position_parent'])
     changeOwner(new_obj, obj_data['metadata']['owner'])
@@ -423,7 +439,7 @@ def create_new_obj(options, folder, old_uid):
     else:
         new_obj = candidate
 
-    for k,v in obj_data['schemadata'].items():
+    for k, v in obj_data['schemadata'].items():
         if k in IGNORED_FIELDS:
             continue
         field = new_obj.Schema().getField(k)
@@ -559,6 +575,18 @@ def import_content(options):
                 log('Setting flowplayer view on %s' % obj.absolute_url(1))
                 obj.selectViewTemplate('flowplayer')
 
+        # Google Video
+        if CP.get(section, 'portal_type') == 'Google Video':
+            pickle_filename = os.path.join(options.input_directory, 'content', section)
+            if not os.path.exists(pickle_filename):
+                return
+            schema_data = cPickle.load(file(pickle_filename))['schemadata']
+            id_ = CP.get(section, 'id')
+            path = CP.get(section, 'path')
+            obj = options.plone.restrictedTraverse(path, None)
+            docId = schema_data['docId']
+            obj.setText('<p><iframe frameborder="0" height="350" src="http://www.youtube.com/embed/%s" style="" width="425"></iframe></p>' % docId)
+
         # Default page
         try:
             default_page = CP.get(section, 'default_page')
@@ -566,7 +594,7 @@ def import_content(options):
             default_page = None
         if default_page:
             path = CP.get(section, 'path')
-            obj = options.plone.restrictedTraverse(path,None)
+            obj = options.plone.restrictedTraverse(path, None)
             try:
                 child_ids = obj.objectIds()
             except AttributeError:
@@ -580,15 +608,16 @@ def import_content(options):
         related_items_paths = CP.get(section, 'related_items_paths').split(',')
         if related_items_paths:
             path = CP.get(section, 'path')
-            obj = options.plone.restrictedTraverse(path,None)
+            obj = options.plone.restrictedTraverse(path, None)
             if obj is not None:
                 ref_objs = []
                 for related_items_path in related_items_paths:
-                    o = options.plone.restrictedTraverse(related_items_path, None)
-                    if o is not None:
-                        ref_objs.append(o)
-                log('Setting related items on %s' % obj.absolute_url(1))
+                    if related_items_path:  # may be empty string
+                        o = options.plone.restrictedTraverse(related_items_path, None)
+                        if o is not None:
+                            ref_objs.append(o)
                 if ref_objs:
+                    log('Setting related items on %s' % obj.absolute_url(1))
                     obj.setRelatedItems(ref_objs)
 
 
@@ -649,7 +678,7 @@ def import_plone(app, options):
     fixup_uids(options)
     return plone.absolute_url(1)
 
-def import_site(options):
+def import_site(app, options):
 
     uf = app.acl_users
     user = uf.getUser(options.username)
@@ -663,7 +692,9 @@ def import_site(options):
     log('done')
     log(url)
 
+
 def main():
+    import Zope2
     parser = OptionParser()
     parser.add_option('-u', '--user', dest='username', default='admin')
     parser.add_option('-x', '--extension-profiles', dest='extension_profiles', default='')
@@ -671,8 +702,13 @@ def main():
     parser.add_option('-d', '--dest-folder', dest='dest_folder', default='sites')
     parser.add_option('-t', '--timestamp', dest='timestamp', action='store_true')
     parser.add_option('-v', '--verbose', dest='verbose', action='store_true', default=False)
+    parser.add_option('-c', dest='dummy')
     options, args = parser.parse_args()
-    import_site(options)
+    app = Zope2.app()
+    if options.dest_folder == '-':
+        options.dest_folder = None
+
+    import_site(app, options)
 
 if __name__ == '__main__':
     main()
