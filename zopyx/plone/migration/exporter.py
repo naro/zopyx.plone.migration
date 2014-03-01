@@ -10,12 +10,12 @@
 #
 # Usage:
 # bin/instance run exporter.py --path /path/to/<plone_id>--output <directory>
-# 
+#
 # The exporter will create a self-contained directory with the exported
 # data unter <directory>/<plone_id>. The directory will contain
 # two INI files contents.ini and structure.ini  that describe
 # the hierarchy structure of the exported site and exported contents.
-# The metadata and real content of each object is stored within the 
+# The metadata and real content of each object is stored within the
 # content subfolder. This directory will contain on file per exported
 # content object. The filename is determined by the original UID
 # of the content object. For binary files like File or Image there is
@@ -25,7 +25,7 @@
 # the data as is.
 # In addition the exporter cares out the export of members and groups
 # (members.ini, groups.ini)
-# 
+#
 # Tested with Plone 2.5, 3.3
 ###################################################################################
 
@@ -50,6 +50,7 @@ from zope.component.interfaces import ComponentLookupError
 
 IGNORED_TYPES = (
     'NewsletterTheme',
+    'DiscussionItem',
 )
 
 PT_REPLACEMENT = {
@@ -63,14 +64,13 @@ def export_plonegazette(options, newsletter):
     ini_fn = os.path.join(options.export_directory, '%s_plonegazette_subscribers' % _getUID(newsletter))
     log('Exporting subscribers for %s to %s' % (newsletter.absolute_url(), ini_fn))
     fp = file(ini_fn, 'w')
-    import pdb; pdb.set_trace()	
     if 'subscribers' in newsletter.objectIds():
         sfolder = newsletter.subscribers
     elif 'subscribers' in newsletter.aq_parent.objectIds():
         sfolder = newsletter.aq_parent.subscribers
     else:
         sfolder = newsletter.aq_parent
-                           
+
     for i, subs in enumerate([sub for sub in sfolder.contentValues() if sub.portal_type =='Subscriber']):
         if not subs.active:
             continue
@@ -130,7 +130,7 @@ def export_members(options):
 
         print >>fp, 'fullname = %s' % member.getProperty('fullname')
         print >>fp, 'email = %s' % member.getProperty('email')
-        print >>fp, 'roles = %s' % ','.join(roles) 
+        print >>fp, 'roles = %s' % ','.join(roles)
         print >>fp
     fp.close()
     log('exported %d users' % len(acl_users.getUserNames()))
@@ -169,10 +169,10 @@ def export_structure(options):
     log('Exporting structure')
     fp = file(os.path.join(options.export_directory, 'structure.ini'), 'w')
     _export_structure(fp, options.plone, newCounter())
-    fp.close()    
+    fp.close()
 
 def _getLocalRolesBlock(obj):
-    val = getattr(obj, '__ac_local_roles_block__', 0) or 0 
+    val = getattr(obj, '__ac_local_roles_block__', 0) or 0
     return int(val)
 
 def _getReviewState(obj):
@@ -190,12 +190,12 @@ def _getTextFormat(obj):
 
 def _getContentType(obj):
     text_format = _getTextFormat(obj)
-    ct = None       
+    ct = None
     try:
         ct = obj.getContentType()
     except AttributeError:
         ct = obj.content_type()
-    if ct is not None: 
+    if ct is not None:
         if text_format in ('html', 'structured-text'):
             ct = 'text/html'
     return ct
@@ -204,7 +204,7 @@ def _getParents(obj):
     result = list()
     current = obj
     while current.portal_type != 'Plone Site':
-        result.append(dict(id=current.getId(), 
+        result.append(dict(id=current.getId(),
                            portal_type=PT_REPLACEMENT.get(current.portal_type, current.portal_type)))
         current = current.aq_inner.aq_parent
     return list(reversed(result))
@@ -230,15 +230,14 @@ def _getDefaultPage(obj):
     try:
         default_page = obj.getDefaultPage() or ''
     except AttributeError:
-        default_page = getattr(obj.aq_inner.aq_base, 'default_page', '') 
+        default_page = getattr(obj.aq_inner.aq_base, 'default_page', '')
     return default_page
 
 def _getPositionInParent(obj):
-
-    parent = aq_parent(aq_inner(obj))
-    ordered = IOrderedContainer(parent, None)
-    if ordered is not None:
-        pos = ordered.getObjectPosition(obj.getId())
+    parent = aq_base(aq_parent(aq_inner(obj)))
+    gop = getattr(parent, 'getObjectPosition', None)
+    if gop is not None:
+        pos = gop(obj.getId())
     else:
         pos = 0
     return pos
@@ -248,7 +247,7 @@ def _getUID(obj):
         return obj.aq_inner.aq_base.UID()
     except AttributeError:
         pass
-        
+
     if hasattr(obj.aq_inner.aq_base, 'fake_uid'):
         return obj.aq_inner.fake_uid
     fake_uid = str(uuid.uuid4())
@@ -276,7 +275,7 @@ def export_content(options):
     os.mkdir(export_dir)
     brains = catalog()
     log('%d items' % len(brains))
-    
+
     fp = file(os.path.join(options.export_directory, 'content.ini'), 'w')
     errors = list()
     num_exported = 0
@@ -303,20 +302,20 @@ def export_content(options):
         except AttributeError:
             errors.append(dict(path=brain.getPath(), error='no schema'))
             schema = None
-         
+
         if obj.portal_type in IGNORED_TYPES:
             continue
 
-        obj_data = dict(schemadata=dict(), metadata=dict())        
+        obj_data = dict(schemadata=dict(), metadata=dict())
         if schema:
             ext_filename = None
             for field in schema.fields():
-                name = field.getName()   
+                name = field.getName()
                 try:
                     value = field.get(obj)
                 except ValueError:
                     continue
-                if name in ('image', 'file'):
+                if name in ('image', 'file', 'attachment'):
                     ext_filename = os.path.join(export_dir, '%s.bin' % _getUID(obj))
                     extfp = file(ext_filename, 'wb')
                     try:
@@ -328,6 +327,9 @@ def export_content(options):
                     value = 'file://%s/%s.bin' % (os.path.abspath(export_dir), _getUID(obj))
                 elif name == 'relatedItems':
                     value = [_getUID(rel_item) for rel_item in value]
+                elif name == 'relatedContent':  # Quiz only?
+                    if value:
+                        value = [_getUID(rel_item) for rel_item in [value] if rel_item]
                 obj_data['schemadata'][name] = value
 
         if obj.portal_type == 'Newsletter':
@@ -354,7 +356,7 @@ def export_content(options):
             stats[obj.portal_type] = 0
         stats[obj.portal_type] += 1
         num_exported += 1
-        
+
         try:
             related_items = ','.join([o.UID() for o in obj.getRelatedItems()])
             related_items_paths = ','.join([_getRelativePath(o, options.plone) for o in obj.getRelatedItems()])
@@ -376,7 +378,7 @@ def export_content(options):
         print >>fp, 'owner = %s' % obj_data['metadata']['owner']
         print >>fp, 'creators = %s' % ','.join(obj_data['schemadata'].get('creators', ''))
         print >>fp, 'position_parent = %d' % obj_data['metadata']['position_parent']
-        print >>fp, 'local_roles_block = %d' % obj_data['metadata']['local_roles_block'] 
+        print >>fp, 'local_roles_block = %d' % obj_data['metadata']['local_roles_block']
         print >>fp
 
         # dump data as pickle
@@ -386,7 +388,7 @@ def export_content(options):
     fp.close()
 
     if errors:
-        log('Errors')    
+        log('Errors')
         for e in errors:
             log(e)
 
