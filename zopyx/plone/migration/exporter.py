@@ -324,7 +324,8 @@ def export_content(options):
                         data = value
                     extfp.write(data)
                     extfp.close()
-                    value = 'file://%s/%s.bin' % (os.path.abspath(export_dir), _getUID(obj))
+                    # just file:///uid.bin because we will build absolute path on import
+                    value = 'file://%s.bin' % _getUID(obj)
                 elif name == 'relatedItems':
                     value = [_getUID(rel_item) for rel_item in value]
                 elif name == 'relatedContent':  # Quiz only?
