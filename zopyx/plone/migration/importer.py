@@ -634,9 +634,14 @@ def setup_plone(app, dest_folder, site_id, products=(), profiles=()):
     dest = app
     if dest_folder:
         dest = dest.restrictedTraverse(dest_folder, None)
-        if dest is None:
-            app.invokeFactory('Folder', dest_folder)
-            dest = dest.restrictedTraverse(dest_folder)
+        if dest is None and (dest_folder in ('elektra', '/elektra')):
+            from Products.ZODBMountPoint.MountedObject import manage_addMounts
+            manage_addMounts(app, ('/elektra',))
+            dest = app.restrictedTraverse(dest_folder)
+        elif dest is None:
+            from OFS import Folder
+            Folder.manage_addFolder(app, dest_folder)
+            dest = app.restrictedTraverse(dest_folder)
     if site_id in dest.objectIds():
         log('%s already exists in %s - REMOVING IT' % (site_id, dest.absolute_url(1)))
         if dest.meta_type != 'Folder':
