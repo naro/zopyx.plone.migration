@@ -37,6 +37,7 @@ import tempfile
 import sys
 import cPickle
 import transaction
+import logging
 
 from Acquisition import aq_base
 from Acquisition import aq_inner
@@ -454,5 +455,20 @@ def main():
     export_site(app, options)
     transaction.commit()
 
+class DummyOptions(object):
+    username = 'admin'
+    path = 'elektra/elektra'
+    output = '/d/Plone-export'
+    verbose = False
+
+def run_as_external_method(context):
+    from AccessControl.SecurityManagement import newSecurityManager
+    app = context.getPhysicalRoot()
+    options = DummyOptions()
+    options.app = app
+    export_site(app, options)
+    transaction.commit()
+
 if __name__ == '__main__':
     main()
+
