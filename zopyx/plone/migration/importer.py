@@ -416,6 +416,8 @@ def create_new_obj(options, folder, old_uid):
     pickle_filename = os.path.join(options.input_directory, 'content', old_uid)
     if not os.path.exists(pickle_filename):
         return
+    if options.verbose:
+        log('    --> loading pickle')
     obj_data = cPickle.load(file(pickle_filename))
     id_ = obj_data['metadata']['id']
     path_ = obj_data['metadata']['path']
@@ -432,6 +434,8 @@ def create_new_obj(options, folder, old_uid):
             folder.setConstrainTypesMode(0)
         pt = obj_data['metadata']['portal_type']
         if not id_ in folder.objectIds():
+            if options.verbose:
+                log('    --> creating %s in %s' % (id_, folder))
             folder.invokeFactory(PT_REPLACE_MAP.get(pt, pt), id=id_)
             if constrainsMode is not None:
                 folder.setConstrainTypesMode(constrainsMode)
@@ -439,21 +443,29 @@ def create_new_obj(options, folder, old_uid):
     else:
         new_obj = candidate
 
+    if options.verbose:
+        log('    --> updating schema')
     for k, v in obj_data['schemadata'].items():
+        kwargs = {}
         if k in IGNORED_FIELDS:
             continue
         field = new_obj.Schema().getField(k)
         if field is None:
             continue
+        kwargs = {}
         if isinstance(v, basestring) and v.startswith('file://'):
             v = v[7:]
             filename = os.path.join(options.input_directory, 'content', v)
+            kwargs['mimetype'] = obj_data['schemadata'].get('__%s__contenttype' % k, None)
+            kwargs['filename'] = obj_data['schemadata'].get('__%s__filename' % k, None)
             v = open(filename).read()
         try:
-            field.set(new_obj, v)
+            field.set(new_obj, v, **kwargs)
         except Exception, e:
             log('Unable to set %s for %s (%s)' % (k, new_obj.absolute_url(1), e))
 
+    if options.verbose:
+        log('    --> updating other 1')
     setLocalRolesBlock(new_obj, obj_data['metadata']['local_roles_block'])
     setObjectPosition(new_obj, obj_data['metadata']['position_parent'])
     changeOwner(new_obj, obj_data['metadata']['owner'])
@@ -463,6 +475,8 @@ def create_new_obj(options, folder, old_uid):
     setWFPolicy(new_obj, obj_data['metadata']['wf_policy'])
     setExcludeFromNav(new_obj, options)
     setContentType(new_obj, obj_data['metadata']['content_type'])
+    if options.verbose:
+        log('    --> reindexing')
     new_obj.reindexObject()
 
 
@@ -515,11 +529,15 @@ def import_content(options):
                 continue
             current = options.plone.restrictedTraverse(path)
 
-        for uid in uids:
+        log('--> going to create %d children' % len(uids))
+        for j, uid in enumerate(uids):
+            if options.verbose:
+                log('--> (%d/%d) %s' % (j+1, len(uids), uid))
             create_new_obj(options, current, uid)
         log('--> %d children created' % len(uids))
 
         if i % 10 == 0:
+            log('--> savepoint on %d' % i)
             transaction.savepoint()
 
     # Now using content.ini for post migration fix-up
