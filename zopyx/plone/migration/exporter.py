@@ -321,12 +321,18 @@ def export_content(options):
                     extfp = file(ext_filename, 'wb')
                     try:
                         data = str(value.data)
+                        filename = value.filename
+                        content_type = value.content_type
                     except:
                         data = value
+                        filename = ''
+                        content_type = ''
                     extfp.write(data)
                     extfp.close()
                     # just file:///uid.bin because we will build absolute path on import
                     value = 'file://%s.bin' % _getUID(obj)
+                    obj_data['schemadata']['__%s__filename' % name] = filename
+                    obj_data['schemadata']['__%s__contenttype' % name] = content_type
                 elif name == 'relatedItems':
                     value = [_getUID(rel_item) for rel_item in value]
                 elif name == 'relatedContent':  # Quiz only?
