@@ -294,6 +294,9 @@ def export_content(options):
                 errors.append(dict(path=brain.getPath(), error=e))
                 continue
 
+        if obj.getId() == 'babies.2010.docu.dvdrip.xvid-amiable-mimina.flv':
+	    continue
+
         # content-type specific export code
         if obj.portal_type in ('Newsletter', 'NewsletterTheme'):
             export_plonegazette(options, obj)
@@ -462,14 +465,15 @@ def main():
     transaction.commit()
 
 class DummyOptions(object):
-    username = 'admin'
-    path = 'elektra/elektra'
-    output = '/d/Plone-export'
+    username = 'adidas'
+    # path = 'elektra/elektra'
+    path = 'Plone'
+    output = 'D:\Plone-export'
     verbose = False
 
-def run_as_external_method(context):
+def run_as_external_method(self):
     from AccessControl.SecurityManagement import newSecurityManager
-    app = context.getPhysicalRoot()
+    app = self.getPhysicalRoot()
     options = DummyOptions()
     options.app = app
     export_site(app, options)
