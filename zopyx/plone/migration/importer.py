@@ -293,7 +293,7 @@ def fix_resolve_uids(obj, options):
             old_uid = url.split('/')[1]
             pickle_filename = os.path.join(options.input_directory, 'content', old_uid)
             if os.path.exists(pickle_filename):
-                old_data = cPickle.load(open(pickle_filename))
+                old_data = cPickle.load(open(pickle_filename, 'rb'))
                 old_path = old_data['metadata']['path']
                 new_obj = obj.restrictedTraverse(old_path, None)
                 if new_obj is not None:
@@ -458,7 +458,7 @@ def create_new_obj(options, folder, old_uid):
             filename = os.path.join(options.input_directory, 'content', v)
             kwargs['mimetype'] = obj_data['schemadata'].get('__%s__contenttype' % k, None)
             kwargs['filename'] = obj_data['schemadata'].get('__%s__filename' % k, None)
-            v = open(filename).read()
+            v = open(filename, 'rb').read()
         try:
             field.set(new_obj, v, **kwargs)
         except Exception, e:
